@@ -47,9 +47,16 @@ class Cat {
 		this.move_Speed = 0;                  // number multiplied to the moveDirection
 		this.destination = NULL_DESTINATION;  // the goal position
 		this.previousBox = null;
+		this.lastDistanceMagnitude = 0;
 		this.timeToNext = 0;
 		this.facing = 1;
 		this.timeSinceDestinationSet = 0;
+	}
+
+	_DEBUG_LOG(message) {
+		if (this.layer.name === 'CAT_01') {
+			console.log(message);
+		}
 	}
 
 	changeActiveSprite(override) {
@@ -104,7 +111,7 @@ class Cat {
 		return null;
 	}
 
-	getDistanceFromDestination() {
+	getDifferenceVectorFromDestination() {
 		return this.layer.origin.subtract(this.destination);
 	}
 
@@ -112,11 +119,12 @@ class Cat {
 		// stops if we are not able to walk
 		if (this.state == 'climb' || this.state == 'jump') return false;
 
-		// if we haven't passed the destination
-		if (!(this.facing == 1 && this.layer.origin.x > this.destination.x) || !(this.facing == -1 && this.layer.origin.x < this.destination.x)) {
-			// stops if we don't need to set a new destination yet
-			if (!forceNewDestination && this.getDistanceFromDestination().length() > DISTANCE_THRESHHOLD && this.destination != NULL_DESTINATION) {
-				return;
+		// stop searching if we haven't passed the destination
+		let currentDistance = Math.abs(this.getDifferenceVectorFromDestination().length());
+		if (currentDistance <= this.lastDistanceMagnitude) {
+			// stops if we don't need to force a new destination yet
+			if (!forceNewDestination && currentDistance > DISTANCE_THRESHHOLD && this.destination != NULL_DESTINATION) {
+				return false;
 			}
 		}
 
@@ -133,7 +141,7 @@ class Cat {
 			let newLayer = thisScene.getLayer(connectionsTag.attributes[i]);
 			if (newLayer) {
 				let newBox = new CollisionBox(newLayer);
-				if (newBox && !newBox.tags.hasOwnProperty('NoWalk')) {
+				if (newBox && newBox.tags && !newBox.tags.hasOwnProperty('NoWalk')) {
 					availableBoxes.push(newBox);
 				}
 			}
@@ -141,14 +149,18 @@ class Cat {
 		let selectedBox = availableBoxes[randInt(0, availableBoxes.length - 1)];
 
 		this.destination = this.layer.origin;
-		while (Math.abs(this.layer.origin.subtract(this.destination).length()) < 20) {
+		let tries = 0;
+		while (Math.abs(this.getDifferenceVectorFromDestination().length()) <= DISTANCE_THRESHHOLD) {
 			let x = randInt(selectedBox.origin.x + (DISTANCE_THRESHHOLD * 2), selectedBox.origin.x + selectedBox.size.x - (DISTANCE_THRESHHOLD * 2));
 			let y = randInt(selectedBox.origin.y + (DISTANCE_THRESHHOLD * 2), selectedBox.origin.y + selectedBox.size.y - (DISTANCE_THRESHHOLD * 2));
 			this.destination = new Vec3(x, y);
 
 			let newDiff = this.destination.subtract(this.layer.origin);
 			this.move_Direction = newDiff.normalize().multiply(1);
+
+			tries++;
 		}
+		this.lastDistanceMagnitude = 1000000000;
 
 		this.timeSinceDestinationSet = 0;
 
@@ -179,18 +191,19 @@ class Cat {
 	}
 
 	jumpStep(deltaTime) {
+		let timeDiff = (engine.timeOfDay * TIME_FIX) - this.jump_startTime;
 		// are we landed?
 		let overlapBox = this.getOverlappingCollisionBox();
-		if (overlapBox && this.jump_startPos.y - this.layer.origin.y > 50 && this.layer.origin.y < overlapBox.size.y) {
+		if (overlapBox && timeDiff > 3 && this.layer.origin.y < this.jump_startPos.y /*this.jump_startPos.y - this.layer.origin.y > 50*/ && this.layer.origin.y < overlapBox.size.y - 15) {
 			this.changeState('land');
-			this.setNewDestination(true);
 			this.timeToNext = 0.2;
 			return;
 		}
 
 		// switch to falling sprite if jump animation is over
-		let timeDiff = (engine.timeOfDay * TIME_FIX) - this.jump_startTime;
-		if (timeDiff > 0.5) {
+		if (timeDiff >= 0.55) {
+			this.changeState('freefall');
+		} else if (timeDiff >= 0.2) {
 			this.changeState('fall');
 		}
 
@@ -199,10 +212,6 @@ class Cat {
 		this.layer.origin = new Vec3(newX, newY);
 
 		this.jump_velocity = this.jump_velocity.add(new Vec2(0, GRAVITY * deltaTime));
-	}
-
-	jumpEnd() {
-		this.timeToNext = 0.375;
 	}
 
 }
@@ -238,10 +247,14 @@ function manageCat(cat, deltaTime) {
 	// if the cat is waiting, don't do anything
 	if (cat.timeToNext > 0) return;
 
+	let canProcessLocation = true;
 	switch (cat.state) {
 		case 'jump':
 		case 'fall':
+		case 'freefall':
 			cat.jumpStep(deltaTime);
+		case 'climb':
+			canProcessLocation = false;
 			break;
 		case 'land':
 		case 'sit':
@@ -250,43 +263,45 @@ function manageCat(cat, deltaTime) {
 			break;
 	}
 
-	if (cat.state != 'climb') {
+	if (canProcessLocation) {
 		// Set a new destination
 		let reachedDestination = cat.setNewDestination();
-
 		cat.setSpriteDirection();
 
 		if (reachedDestination) {
 			let overlapBox = cat.getOverlappingCollisionBox();
-			if (overlapBox.tags.hasOwnProperty('Climbable')) {
-				// climb if current position overlaps a Climbable CollisionBox
-				cat.climbStart(overlapBox);
-			} else if (cat.state == 'ledgeclimb') {
-				// finish climbing
-				cat.climbEnd();
-			} else if (overlapBox.tags.hasOwnProperty('JumpTo') && randInt(1, 10) == 1) {
-				// jump down to lower area
-				cat.jumpStart();
-			} else if (randInt(1, 15) == 1) {
-				// chance to sit upon reaching destination
-				cat.changeState('sit');
-				if (randInt(1, 4) == 1) {
-					cat.changeState('lay');
+			if (overlapBox) {
+				if (overlapBox.tags.hasOwnProperty('Climbable')) {
+					// climb if current position overlaps a Climbable CollisionBox
+					cat.climbStart(overlapBox);
+				} else if (cat.state == 'ledgeclimb') {
+					// finish climbing
+					cat.climbEnd();
+				} else if (overlapBox.tags.hasOwnProperty('JumpTo') && randInt(1, 10) == 1) {
+					// jump down to lower area
+					cat.jumpStart();
+				} else if (randInt(1, 15) == 1) {
+					// chance to sit upon reaching destination
+					cat.changeState('sit');
+					if (randInt(1, 4) == 1) {
+						cat.changeState('lay');
+					}
+					cat.timeToNext = randInt(10, 30);
+				} else if (randInt(1, 15) == 1) {
+					// chance to run instead of walk
+					cat.changeState('run');
+				} else {
+					cat.changeState('walk');
 				}
-				cat.timeToNext = randInt(10, 30);
-			} else if (randInt(1, 15) == 1) {
-				// chance to run instead of walk
-				cat.changeState('run');
-			} else {
-				cat.changeState('walk');
 			}
 		} else {
+			// reset cat if it went wandering
 			if (cat.timeSinceDestinationSet > 20) {
 				cat.layer.origin = new Vec3(873, 167);
 				cat.setNewDestination(true);
 			}
 		}
-	} else if (cat.getDistanceFromDestination().length() <= DISTANCE_THRESHHOLD) {
+	} else if (Math.abs(cat.getDifferenceVectorFromDestination().length()) <= DISTANCE_THRESHHOLD) {
 		cat.changeState('ledgeclimb');
 		cat.timeToNext = 1.3;
 	}
@@ -309,6 +324,8 @@ function manageCat(cat, deltaTime) {
 			break;
 	}
 
+	cat.lastDistanceMagnitude = Math.abs(cat.getDifferenceVectorFromDestination().length());
+
 	let newPos = cat.move_Direction.multiply(cat.move_Speed).multiply(deltaTime);
 	cat.layer.origin = cat.layer.origin.add(newPos);
 }
@@ -325,7 +342,7 @@ function fixZOrdering(cats) {
 
 	for (let i = 0; i < sortable.length; i++) {
 		let layer = sortable[i][0];
-		let baseIndex = (i * 12) + 2;
+		let baseIndex = (i * 13) + 70;
 
 		thisScene.sortLayer(layer, baseIndex);
 		let children = layer.getChildren();
