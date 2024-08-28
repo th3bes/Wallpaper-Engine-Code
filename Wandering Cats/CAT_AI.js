@@ -184,6 +184,7 @@ class Cat {
 
 	jumpStart() {
 		this.changeState('jump');
+		this.jump_originLayer = this.getOverlappingCollisionBox().layer;
 		this.jump_velocity = new Vec2(25 * this.facing, 100);
 		this.jump_startTime = engine.timeOfDay * TIME_FIX;
 		this.jump_startPos = this.layer.origin;
@@ -194,10 +195,12 @@ class Cat {
 		let timeDiff = (engine.timeOfDay * TIME_FIX) - this.jump_startTime;
 		// are we landed?
 		let overlapBox = this.getOverlappingCollisionBox();
-		if (overlapBox && timeDiff > 3 && this.layer.origin.y < this.jump_startPos.y /*this.jump_startPos.y - this.layer.origin.y > 50*/ && this.layer.origin.y < overlapBox.size.y - 15) {
-			this.changeState('land');
-			this.timeToNext = 0.2;
-			return;
+		if (overlapBox) {
+			if (timeDiff > 1 && overlapBox.layer != this.jump_originLayer && this.layer.origin.y < overlapBox.size.y - 15) {
+				this.changeState('land');
+				this.timeToNext = 0.2;
+				return;
+			}
 		}
 
 		// switch to falling sprite if jump animation is over
