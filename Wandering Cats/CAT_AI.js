@@ -296,7 +296,7 @@ function manageCat(cat, deltaTime) {
 			}
 		} else {
 			// reset cat if it went wandering
-			if (cat.timeSinceDestinationSet > 20) {
+			if (cat.timeSinceDestinationSet > 60) {
 				cat.layer.origin = new Vec3(873, 167);
 				cat.setNewDestination(true);
 			}
