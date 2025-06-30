@@ -1,5 +1,7 @@
 "use strict";
 
+let FIRST_UPDATE_PASSED = false;
+
 const TIME_FIX = 24 * 60 * 60;
 const ANIMATION_FRAMES_PER_SECOND = 8;
 const FRAME_TIME_INTERVAL = 1 / ANIMATION_FRAMES_PER_SECOND;
@@ -315,13 +317,13 @@ export function init() {
 
 export function update() {
 	const currentTime = engine.timeOfDay * TIME_FIX;
-	let deltaTime = currentTime - lastTime; if (currentTime < lastTime) deltaTime = currentTime; // midnight fix
+	let deltaTime = currentTime - lastTime; if (currentTime < lastTime) deltaTime = 0; // midnight fix
 
 	for (let i = 0; i < cats.length; i++) {
 		const cat = cats[i];
 
 		cat.timeSinceLastStateChange += deltaTime;
-		if (cat.timeSinceLastStateChange > 30) {
+		if (FIRST_UPDATE_PASSED && cat.timeSinceLastStateChange > 30) {
 			console.log(`WARNING: ${cat.layer.name}'s state was stagnant for too long, reset!'`);
 			cat.layer.origin = new Vec3(875, 170, 0);
 			cat.decideNextState();
@@ -338,6 +340,7 @@ export function update() {
 		} catch(err) {}
 		
 	}
+	FIRST_UPDATE_PASSED = true;
 	lastTime = currentTime;
 
 	// Z Sorting
