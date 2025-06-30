@@ -5,6 +5,7 @@ let FIRST_UPDATE_PASSED = false;
 const TIME_FIX = 24 * 60 * 60;
 const ANIMATION_FRAMES_PER_SECOND = 8;
 const FRAME_TIME_INTERVAL = 1 / ANIMATION_FRAMES_PER_SECOND;
+const MAX_DELTA_TIME = 1/10;
 
 const GRAVITY = -200
 const DRAG = -1;
@@ -317,7 +318,7 @@ export function init() {
 
 export function update() {
 	const currentTime = engine.timeOfDay * TIME_FIX;
-	let deltaTime = currentTime - lastTime; if (currentTime < lastTime) deltaTime = 0; // midnight fix
+	let deltaTime = currentTime - lastTime; if (Math.abs(currentTime - lastTime) > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
 	for (let i = 0; i < cats.length; i++) {
 		const cat = cats[i];
