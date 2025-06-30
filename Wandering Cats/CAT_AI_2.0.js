@@ -323,6 +323,8 @@ export function update() {
 	for (let i = 0; i < cats.length; i++) {
 		const cat = cats[i];
 
+		if (!cat.layer.visible) continue;
+
 		cat.timeSinceLastStateChange += deltaTime;
 		if (FIRST_UPDATE_PASSED && cat.timeSinceLastStateChange > 30) {
 			console.log(`WARNING: ${cat.layer.name}'s state was stagnant for too long, reset!'`);
@@ -346,10 +348,15 @@ export function update() {
 
 	// Z Sorting
 	let sortable = [];
-	for (let i = 0; i < cats.length; i++) sortable.push(cats[i]);
+	for (let i = 0; i < cats.length; i++) {
+		if (!cats[i].layer.visible) continue;
+		sortable.push(cats[i]);
+	}
 	sortable.sort(function (a, b) { return Math.floor(b.layer.origin.y) - Math.floor(a.layer.origin.y) });
 
 	for (let i = 0; i < sortable.length; i++) {
-		thisScene.sortLayer(sortable[i].animator.layer, i + BASE_Z_INDEX);
+		const zIndex = (i * 2) + BASE_Z_INDEX + 1
+		thisScene.sortLayer(sortable[i].animator.layer, zIndex);
+		thisScene.sortLayer(sortable[i].layer.getChildren()[1], zIndex - 1);
 	}
 }
