@@ -40,7 +40,7 @@ class Cat {
 
 		this.jumpStartBox = null;
 		this.jumpVelocity = new Vec3(25, 100, 0);
-		this.jumpLandOffset = randFloat(20, 200);
+		this.jumpLandOffset = 20;
 		this.jumpFinished = false;
 
 		// setup animations
@@ -208,7 +208,7 @@ class Cat {
 			case "jumping":
 				this.jumpStartBox = this.getOverlappingCollisionBox();
 				this.jumpVelocity = new Vec3(25 * this.animator.layer.scale.x, 100);
-				this.jumpLandOffset = randFloat(20, 200);
+				this.jumpLandOffset = randFloat(20, 100);
 				this.jumpFinished = false;
 				this.animator.playAnimation("jump_start", this.moveDirection.x < 0, 0);
 				break;
